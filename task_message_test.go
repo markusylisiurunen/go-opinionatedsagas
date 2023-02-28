@@ -9,13 +9,13 @@ import (
 
 func TestTaskMessage(t *testing.T) {
 	t.Run("marshals and unmarshals a task message", func(t *testing.T) {
-		compensate := newTaskMessage(&testTask{"compensate_1"})
+		compensate := newTaskMessage(newTestTask("test", "compensate_1"))
 		rollbackHistory := newRollbackStack()
 		rollbackHistory.push(compensate.asRollbackStackItem())
-		task := newTaskMessageWithRollbackHistory(&testTask{"hello world"}, rollbackHistory)
+		task := newTaskMessageWithRollbackHistory(newTestTask("test", "hello world"), rollbackHistory)
 		data, err := json.Marshal(task)
 		assert.NoError(t, err)
-		task = newTaskMessage(&testTask{})
+		task = newTaskMessage(&testTask{name: "test"})
 		assert.NoError(t, json.Unmarshal(data, task))
 		assert.Equal(t, 0, len(task.Meta))
 		assert.Equal(t, 1, len(task.RollbackStack.stack))
@@ -25,13 +25,13 @@ func TestTaskMessage(t *testing.T) {
 
 	t.Run("handles rolling back correctly", func(t *testing.T) {
 		// construct the rollback history
-		compensateOne := newTaskMessage(&testTask{"compensate_1"})
-		compensateTwo := newTaskMessage(&testTask{"compensate_2"})
+		compensateOne := newTaskMessage(newTestTask("test", "compensate_1"))
+		compensateTwo := newTaskMessage(newTestTask("test", "compensate_2"))
 		rollbackHistory := newRollbackStack()
 		rollbackHistory.push(compensateOne.asRollbackStackItem())
 		rollbackHistory.push(compensateTwo.asRollbackStackItem())
 		// build the "failing" task itself
-		task := newTaskMessageWithRollbackHistory(&testTask{"task_1"}, rollbackHistory)
+		task := newTaskMessageWithRollbackHistory(newTestTask("test", "task_1"), rollbackHistory)
 		// fake a rollback call and assert the result
 		rollbackTo, ok := task.rollback()
 		assert.True(t, ok)
@@ -48,18 +48,18 @@ func TestTaskMessage(t *testing.T) {
 		serializeAndDeserialize := func(src *taskMessage) *taskMessage {
 			data, err := json.Marshal(src)
 			assert.NoError(t, err)
-			dest := newTaskMessage(&testTask{})
+			dest := newTaskMessage(&testTask{name: "test"})
 			assert.NoError(t, json.Unmarshal(data, dest))
 			return dest
 		}
 		// construct the rollback history
-		compensateOne := newTaskMessage(&testTask{"compensate_1"})
-		compensateTwo := newTaskMessage(&testTask{"compensate_2"})
+		compensateOne := newTaskMessage(newTestTask("test", "compensate_1"))
+		compensateTwo := newTaskMessage(newTestTask("test", "compensate_2"))
 		rollbackHistory := newRollbackStack()
 		rollbackHistory.push(compensateOne.asRollbackStackItem())
 		rollbackHistory.push(compensateTwo.asRollbackStackItem())
 		// construct the initial task message with the rollback history
-		task := newTaskMessageWithRollbackHistory(&testTask{"original_task"}, rollbackHistory)
+		task := newTaskMessageWithRollbackHistory(newTestTask("test", "original_task"), rollbackHistory)
 		task = serializeAndDeserialize(task)
 		// first rollback
 		task, ok := task.rollback()
@@ -79,12 +79,4 @@ func TestTaskMessage(t *testing.T) {
 		_, ok = task.rollback()
 		assert.False(t, ok)
 	})
-}
-
-type testTask struct {
-	Value string `json:"value"`
-}
-
-func (t *testTask) TaskName() string {
-	return "tasks.test"
 }

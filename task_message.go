@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/markusylisiurunen/go-opinionatedevents"
+	events "github.com/markusylisiurunen/go-opinionatedevents"
 )
 
 type task interface {
@@ -83,6 +83,6 @@ func (t *taskMessage) asRollbackStackItem() *rollbackStackItem {
 func (t *taskMessage) MarshalPayload() ([]byte, error)    { return json.Marshal(t) }
 func (t *taskMessage) UnmarshalPayload(data []byte) error { return json.Unmarshal(data, t) }
 
-func (t *taskMessage) toOpinionatedMessage() (*opinionatedevents.Message, error) {
-	return opinionatedevents.NewMessage(t.TaskName(), t)
+func (t *taskMessage) toOpinionatedMessage() (*events.Message, error) {
+	return events.NewMessage(t.TaskName(), t)
 }

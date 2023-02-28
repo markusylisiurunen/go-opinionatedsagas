@@ -23,6 +23,13 @@ TODO
 TODO
 
 ```go
+package main
+
+import (
+  events "github.com/markusylisiurunen/go-opinionatedevents"
+  sagas "github.com/markusylisiurunen/go-opinionatedsagas"
+)
+
 type DoXTask struct {
   X int `json:"x"`
 }
@@ -47,26 +54,24 @@ func (t *DoYTask) TaskName() string {
   return "tasks.do_y"
 }
 
-func Example(
-  receiver *opinionatedevents.Receiver,
-  publisher *opinionatedevents.Publisher,
-) error {
-  saga := opinionatedsagas.NewSaga(receiver, publisher, "tasks")
-  saga.AddStep(&opinionatedsagas.Step{
-    HandleFunc: func(ctx context.Context, task *DoXTask) (opinionatedevents.ResultContainer, *CompensateDoXTask, *DoYTask) {
-      return opinionatedevents.SuccessResult(), &CompensateDoXTask{X: task.X}, &DoYTask{Y: 42}
+func Example(receiver *events.Receiver, publisher *events.Publisher) error {
+  saga := sagas.NewSaga(receiver, publisher, "tasks")
+  saga.AddStep(&sagas.Step{
+    HandleFunc: func(ctx context.Context, task *DoXTask) (sagas.Result, *CompensateDoXTask, *DoYTask) {
+      return sagas.Success(), &CompensateDoXTask{X: task.X}, &DoYTask{Y: 42}
     },
-    CompensateFunc: func(ctx context.Context, task *CompensateDoXTask) opinionatedevents.ResultContainer {
-      return opinionatedevents.SuccessResult()
+    CompensateFunc: func(ctx context.Context, task *CompensateDoXTask) sagas.Result {
+      return sagas.Success()
     },
   })
-  saga.AddStep(&opinionatedsagas.Step{
-    HandleFunc: func(ctx context.Context, task *DoYTask) opinionatedevents.ResultContainer {
+  saga.AddStep(&sagas.Step{
+    HandleFunc: func(ctx context.Context, task *DoYTask) sagas.Result {
       if rand.Float64() <= 0.33 {
-        // if an error occurs (too many times), the saga will roll back and the previous steps' `CompensateFunc`s will be invoked.
-        return opinionatedevents.ErrorResult(errors.New("something went wrong"), 15*time.Second)
+        // if an error occurs (too many times), the saga will roll back and the previous
+        // steps' `CompensateFunc`s will be invoked.
+        return sagas.Error(errors.New("something went wrong"), 15*time.Second)
       }
-      return opinionatedevents.SuccessResult()
+      return sagas.Success()
     },
   })
   return saga.RegisterHandlers()
