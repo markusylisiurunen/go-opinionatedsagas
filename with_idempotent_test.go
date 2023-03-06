@@ -16,7 +16,7 @@ import (
 )
 
 func TestWithIdempotentSequentially(t *testing.T) {
-	r := rand.New(rand.NewSource(0))
+	r := rand.New(rand.NewSource(5348997842))
 	// init database connection
 	connectionString := "postgres://postgres:password@localhost:6632/dev?sslmode=disable"
 	schema := fmt.Sprintf("opinionatedsagas_%d", r.Int())
@@ -58,7 +58,7 @@ func TestWithIdempotentSequentially(t *testing.T) {
 }
 
 func TestWithIdempotentConcurrently(t *testing.T) {
-	r := rand.New(rand.NewSource(0))
+	r := rand.New(rand.NewSource(1234893457))
 	// init database connection
 	connectionString := "postgres://postgres:password@localhost:6632/dev?sslmode=disable"
 	schema := fmt.Sprintf("opinionatedsagas_%d", r.Int())

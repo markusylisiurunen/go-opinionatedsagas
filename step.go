@@ -20,6 +20,8 @@ type Step struct {
 
 	HandleFunc     any
 	CompensateFunc any
+
+	MaxAttempts int
 }
 
 func (s *Step) init(db *sql.DB, schema string, publisher *events.Publisher, receiver *events.Receiver, queue string) {
@@ -28,6 +30,10 @@ func (s *Step) init(db *sql.DB, schema string, publisher *events.Publisher, rece
 	s.publisher = publisher
 	s.receiver = receiver
 	s.queue = queue
+}
+
+func (s *Step) getMaxAttempts() int {
+	return s.MaxAttempts
 }
 
 func (s *Step) isForTask(task task) bool {
@@ -53,24 +59,34 @@ func (s *Step) handleFuncIsValid() error {
 	// get the count of function arguments and return values
 	inCount := funcValue.Type().NumIn()
 	outCount := funcValue.Type().NumOut()
-	// validate the case of 2 -> 3
-	if inCount == 2 && outCount == 3 {
+	// validate all cases of 2 arguments
+	if inCount == 2 {
 		if !isInterface[context.Context](funcValue.Type().In(0)) {
 			return errors.New("the first handle func argument must implement 'context.Context'")
 		}
 		if !isInterface[task](funcValue.Type().In(1)) {
 			return errors.New("the second handle func argument must implement 'task'")
 		}
-		if !isInterface[events.ResultContainer](funcValue.Type().Out(0)) {
-			return errors.New("the first handle func return value must implement 'opinionatedevents.ResultContainer'")
+		// validate the case of 2 -> 1
+		if outCount == 1 {
+			if !isInterface[events.ResultContainer](funcValue.Type().Out(0)) {
+				return errors.New("the first handle func return value must implement 'opinionatedevents.ResultContainer'")
+			}
+			return nil
 		}
-		if !isInterface[task](funcValue.Type().Out(1)) {
-			return errors.New("the second handle func return value must implement 'task'")
+		// validate the case of 2 -> 3
+		if outCount == 3 {
+			if !isInterface[events.ResultContainer](funcValue.Type().Out(0)) {
+				return errors.New("the first handle func return value must implement 'opinionatedevents.ResultContainer'")
+			}
+			if !isInterface[task](funcValue.Type().Out(1)) {
+				return errors.New("the second handle func return value must implement 'task'")
+			}
+			if !isInterface[task](funcValue.Type().Out(2)) {
+				return errors.New("the third handle func return value must implement 'task'")
+			}
+			return nil
 		}
-		if !isInterface[task](funcValue.Type().Out(2)) {
-			return errors.New("the third handle func return value must implement 'task'")
-		}
-		return nil
 	}
 	return errors.New("an unknown combination of handle func arguments and return values")
 }
@@ -116,12 +132,17 @@ func (s *Step) mountHandleFunc() error {
 			reflect.ValueOf(ctx),
 			reflect.ValueOf(taskMessage.Task),
 		})
-		resultValue, compensateTaskValue, nextTaskValue := outValue[0], outValue[1], outValue[2]
+		resultValue := outValue[0]
 		// check the result, if it's not success, return it right away
 		result := resultValue.Interface().(result)
 		if result.GetResult().Err != nil {
 			return result
 		}
+		// if the handler only returned the result, just return the result
+		if len(outValue) == 1 {
+			return result
+		}
+		compensateTaskValue, nextTaskValue := outValue[1], outValue[2]
 		// if there is no next task to be published, just return the result
 		if nextTaskValue.IsNil() {
 			return result
@@ -152,7 +173,7 @@ func (s *Step) mountHandleFunc() error {
 		middlewares{
 			// 10s, 15s, 30s, 1m21s, 4m11s, 13m35s, 30m0s, 30m0s
 			events.WithBackoff(events.ExponentialBackoff(10, 2, 1.2, 30*time.Minute)),
-			withRollback(s.publisher, 3),
+			withRollback(s.publisher, s.getMaxAttempts()),
 			withIdempotent(s.db, s.schema),
 		}.
 			wrap(handle),

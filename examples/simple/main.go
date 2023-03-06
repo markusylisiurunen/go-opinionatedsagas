@@ -63,14 +63,13 @@ func handleRollbackChargeCustomerTask(ctx context.Context, msg *rollbackChargeCu
 	return events.SuccessResult()
 }
 
-// FIXME: the `rollbackChargeCustomerTask` and `sendReceiptTask` are incorrect
-func handleSendReceiptTask(ctx context.Context, msg *sendReceiptTask) (result, *rollbackChargeCustomerTask, *sendReceiptTask) {
+func handleSendReceiptTask(ctx context.Context, msg *sendReceiptTask) result {
 	fmt.Println("handle send receipt task was invoked")
 	if rand.Intn(100) < 50 {
 		fmt.Println("simulated error from sending a receipt")
-		return events.ErrorResult(errors.New(""), time.Second), nil, nil
+		return events.ErrorResult(errors.New(""), time.Second)
 	}
-	return events.SuccessResult(), nil, nil
+	return events.SuccessResult()
 }
 
 // register steps
@@ -89,7 +88,8 @@ func registerSaga(ctx context.Context) error {
 		CompensateFunc: handleRollbackChargeCustomerTask,
 	})
 	saga.AddStep(&sagas.Step{
-		HandleFunc: handleSendReceiptTask,
+		MaxAttempts: 1,
+		HandleFunc:  handleSendReceiptTask,
 	})
 	if err := saga.RegisterHandlers(); err != nil {
 		return err

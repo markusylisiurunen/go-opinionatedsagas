@@ -77,8 +77,8 @@ func (s *testSaga) trigger(attempt int, t task, r []task) (result, error) {
 }
 
 func TestSagaHandle(t *testing.T) {
-	t.Run("executes the first step's handler func", func(t *testing.T) {
-		r := rand.New(rand.NewSource(0))
+	t.Run("executes the steps' handlers with not errors", func(t *testing.T) {
+		r := rand.New(rand.NewSource(4537392487))
 		// init database connection
 		connectionString := "postgres://postgres:password@localhost:6632/dev?sslmode=disable"
 		schema := fmt.Sprintf("opinionatedsagas_%d", r.Int())
@@ -93,6 +93,7 @@ func TestSagaHandle(t *testing.T) {
 		var counterXHandle atomic.Int64
 		var counterXCompensate atomic.Int64
 		saga.addStep(&Step{
+			MaxAttempts: 1,
 			HandleFunc: func(ctx context.Context, task *testSagaXTask) (result, *testSagaCompensateXTask, *testSagaYTask) {
 				counterXHandle.Add(1)
 				return events.SuccessResult(), &testSagaCompensateXTask{Value: "test"}, &testSagaYTask{Value: "test"}
@@ -105,6 +106,68 @@ func TestSagaHandle(t *testing.T) {
 		// init the y-step
 		var counterYHandle atomic.Int64
 		saga.addStep(&Step{
+			MaxAttempts: 1,
+			HandleFunc: func(ctx context.Context, task *testSagaYTask) result {
+				counterYHandle.Add(1)
+				return events.SuccessResult()
+			},
+		})
+		// register the handlers
+		err = saga.registerHandlers()
+		assert.NoError(t, err)
+		// execute the first x-step
+		result1, err := saga.trigger(1, &testSagaXTask{Value: "test"}, []task{})
+		assert.NoError(t, err)
+		assert.NoError(t, result1.GetResult().Err)
+		// execute the first y-step
+		result2, err := saga.trigger(1, &testSagaYTask{Value: "test"}, []task{
+			&testSagaCompensateXTask{Value: "test"},
+		})
+		assert.NoError(t, err)
+		assert.NoError(t, result2.GetResult().Err)
+		// validate the task handle execution counts
+		assert.Equal(t, int64(1), counterXHandle.Load())
+		assert.Equal(t, int64(0), counterXCompensate.Load())
+		assert.Equal(t, int64(1), counterXHandle.Load())
+		// validate the published tasks
+		assert.Len(t, saga.destination.messages, 1)
+		assert.Equal(t, "tasks.y", saga.destination.getTaskName(0))
+		assert.Equal(t, 1, saga.destination.getRollbackStackSize(0))
+		assert.Equal(t, "tasks.compensate_x", saga.destination.getRollbackStackTaskName(0, 0))
+		// shut down the saga
+		cancel()
+	})
+
+	t.Run("executes the first step's handler func", func(t *testing.T) {
+		r := rand.New(rand.NewSource(2346786792))
+		// init database connection
+		connectionString := "postgres://postgres:password@localhost:6632/dev?sslmode=disable"
+		schema := fmt.Sprintf("opinionatedsagas_%d", r.Int())
+		// init the saga
+		ctx, cancel := context.WithCancel(context.Background())
+		saga, err := newTestSaga(ctx, &SagaOpts{
+			ConnectionString: connectionString,
+			Schema:           schema,
+		})
+		assert.NoError(t, err)
+		// init the x-step
+		var counterXHandle atomic.Int64
+		var counterXCompensate atomic.Int64
+		saga.addStep(&Step{
+			MaxAttempts: 1,
+			HandleFunc: func(ctx context.Context, task *testSagaXTask) (result, *testSagaCompensateXTask, *testSagaYTask) {
+				counterXHandle.Add(1)
+				return events.SuccessResult(), &testSagaCompensateXTask{Value: "test"}, &testSagaYTask{Value: "test"}
+			},
+			CompensateFunc: func(ctx context.Context, task *testSagaCompensateXTask) result {
+				counterXCompensate.Add(1)
+				return events.SuccessResult()
+			},
+		})
+		// init the y-step
+		var counterYHandle atomic.Int64
+		saga.addStep(&Step{
+			MaxAttempts: 2,
 			HandleFunc: func(ctx context.Context, task *testSagaYTask) (result, *testSagaCompensateYTask, *testSagaZTask) {
 				counterYHandle.Add(1)
 				return events.ErrorResult(errors.New(""), 10*time.Second), nil, nil
@@ -118,12 +181,12 @@ func TestSagaHandle(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NoError(t, result1.GetResult().Err)
 		// execute the first y-step
-		result2_1, err := saga.trigger(2, &testSagaYTask{Value: "test"}, []task{
+		result2_1, err := saga.trigger(1, &testSagaYTask{Value: "test"}, []task{
 			&testSagaCompensateXTask{Value: "test"},
 		})
 		assert.NoError(t, err)
 		assert.Error(t, result2_1.GetResult().Err)
-		result2_2, err := saga.trigger(3, &testSagaYTask{Value: "test"}, []task{
+		result2_2, err := saga.trigger(2, &testSagaYTask{Value: "test"}, []task{
 			&testSagaCompensateXTask{Value: "test"},
 		})
 		assert.NoError(t, err)

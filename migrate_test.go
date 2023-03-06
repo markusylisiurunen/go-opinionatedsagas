@@ -12,7 +12,7 @@ import (
 )
 
 func TestMigrate(t *testing.T) {
-	r := rand.New(rand.NewSource(0))
+	r := rand.New(rand.NewSource(8673244357))
 	connectionString := "postgres://postgres:password@localhost:6632/dev?sslmode=disable"
 	schema := fmt.Sprintf("opinionatedsagas_%d", r.Int())
 	db, err := sql.Open("postgres", connectionString)

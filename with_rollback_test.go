@@ -13,6 +13,26 @@ import (
 )
 
 func TestWithRollback(t *testing.T) {
+	t.Run("does not limit the max attempts if set to zero", func(t *testing.T) {
+		// initialise a mock publisher
+		destination := newTestDestination()
+		publisher, err := events.NewPublisher(events.PublisherWithSyncBridge(destination))
+		assert.NoError(t, err)
+		// initialise the rollback middleware
+		middleware := withRollback(publisher, 0)(
+			func(ctx context.Context, queue string, delivery events.Delivery) result {
+				return events.ErrorResult(errors.New("not implemented"), 1*time.Second)
+			},
+		)
+		// attempt to handle the task `n` times
+		for i := 0; i < 99; i += 1 {
+			result := middleware(context.Background(), "tasks", newTestDelivery(i+1, 0))
+			assert.Error(t, result.GetResult().Err)
+			assert.False(t, result.GetResult().RetryAt.IsZero())
+			assert.Len(t, destination.messages, 0)
+		}
+	})
+
 	t.Run("discards the task after too many failed attempts with an empty rollback stack", func(t *testing.T) {
 		// initialise a mock publisher
 		destination := newTestDestination()

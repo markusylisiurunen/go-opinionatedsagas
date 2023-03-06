@@ -22,6 +22,13 @@ func TestStepHandleFuncValidation(t *testing.T) {
 			expectedToBeOk: true,
 		},
 		{
+			name: "a valid handle func returning only result",
+			handleFunc: func(ctx context.Context, task *testFuncTask) result {
+				return events.SuccessResult()
+			},
+			expectedToBeOk: true,
+		},
+		{
 			name: "handle func with no arguments",
 			handleFunc: func() (result, *testFuncTask, *testFuncTask) {
 				return events.SuccessResult(), &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}
@@ -52,13 +59,6 @@ func TestStepHandleFuncValidation(t *testing.T) {
 		{
 			name:           "handle func with no return values",
 			handleFunc:     func(ctx context.Context, task *testFuncTask) {},
-			expectedToBeOk: false,
-		},
-		{
-			name: "handle func returning only the result",
-			handleFunc: func(ctx context.Context, task *testFuncTask) result {
-				return events.SuccessResult()
-			},
 			expectedToBeOk: false,
 		},
 		{

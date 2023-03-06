@@ -11,6 +11,10 @@ type task interface {
 	TaskName() string
 }
 
+type noopTask struct{}
+
+func (t *noopTask) TaskName() string { return "noop" }
+
 type anyTask struct {
 	name string
 	task map[string]any
