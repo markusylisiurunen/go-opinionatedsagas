@@ -26,46 +26,50 @@ TODO
 package main
 
 import (
-  events "github.com/markusylisiurunen/go-opinionatedevents"
+  "context"
   sagas "github.com/markusylisiurunen/go-opinionatedsagas"
 )
 
-type DoXTask struct {
+type DoX struct {
   X int `json:"x"`
 }
 
-func (t *DoXTask) TaskName() string {
+func (t *DoX) TaskName() string {
   return "tasks.do_x"
 }
 
-type CompensateDoXTask struct {
+type CompensateX struct {
   X int `json:"x"`
 }
 
-func (t *CompensateDoXTask) TaskName() string {
-  return "tasks.compensate_do_x"
+func (t *CompensateX) TaskName() string {
+  return "tasks.compensate_x"
 }
 
-type DoYTask struct {
+type DoY struct {
   Y int `json:"y"`
 }
 
-func (t *DoYTask) TaskName() string {
+func (t *DoY) TaskName() string {
   return "tasks.do_y"
 }
 
-func Example(receiver *events.Receiver, publisher *events.Publisher) error {
-  saga := sagas.NewSaga(receiver, publisher, "tasks")
+func Example(ctx context.Context, connectionString string) error {
+  saga, err := sagas.NewSaga(ctx, &sagas.SagaOpts{ConnectionString: connectionString})
+  if err != nil {
+    return err
+  }
   saga.AddStep(&sagas.Step{
-    HandleFunc: func(ctx context.Context, task *DoXTask) (sagas.Result, *CompensateDoXTask, *DoYTask) {
-      return sagas.Success(), &CompensateDoXTask{X: task.X}, &DoYTask{Y: 42}
+    HandleFunc: func(ctx context.Context, task *DoX) (sagas.Result, *CompensateX, *DoY) {
+      return sagas.Success(), &CompensateX{X: task.X}, &DoY{Y: 42}
     },
-    CompensateFunc: func(ctx context.Context, task *CompensateDoXTask) sagas.Result {
+    CompensateFunc: func(ctx context.Context, task *CompensateX) sagas.Result {
       return sagas.Success()
     },
   })
   saga.AddStep(&sagas.Step{
-    HandleFunc: func(ctx context.Context, task *DoYTask) sagas.Result {
+    MaxAttempts: 3,
+    HandleFunc: func(ctx context.Context, task *DoY) sagas.Result {
       if rand.Float64() <= 0.33 {
         // if an error occurs (too many times), the saga will roll back and the previous
         // steps' `CompensateFunc`s will be invoked.
@@ -74,6 +78,10 @@ func Example(receiver *events.Receiver, publisher *events.Publisher) error {
       return sagas.Success()
     },
   })
-  return saga.RegisterHandlers()
+  err = saga.RegisterHandlers()
+  if err != nil {
+    return err
+  }
+  return nil
 }
 ```
