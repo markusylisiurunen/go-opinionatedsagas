@@ -133,7 +133,7 @@ func TestSagaHandle(t *testing.T) {
 		assert.Len(t, saga.destination.messages, 1)
 		assert.Equal(t, "tasks.y", saga.destination.getTaskName(0))
 		assert.Equal(t, 1, saga.destination.getRollbackStackSize(0))
-		assert.Equal(t, "tasks.compensate_x", saga.destination.getRollbackStackTaskName(0, 0))
+		assert.Equal(t, "compensate_x", saga.destination.getRollbackStackTaskName(0, 0))
 		// shut down the saga
 		cancel()
 	})
@@ -199,7 +199,7 @@ func TestSagaHandle(t *testing.T) {
 		assert.Len(t, saga.destination.messages, 2)
 		assert.Equal(t, "tasks.y", saga.destination.getTaskName(0))
 		assert.Equal(t, 1, saga.destination.getRollbackStackSize(0))
-		assert.Equal(t, "tasks.compensate_x", saga.destination.getRollbackStackTaskName(0, 0))
+		assert.Equal(t, "compensate_x", saga.destination.getRollbackStackTaskName(0, 0))
 		assert.Equal(t, "tasks.compensate_x", saga.destination.getTaskName(1))
 		assert.Equal(t, 0, saga.destination.getRollbackStackSize(1))
 		// shut down the saga
@@ -265,28 +265,28 @@ type testSagaXTask struct {
 	Value string `json:"value"`
 }
 
-func (t *testSagaXTask) TaskName() string { return "tasks.x" }
+func (t *testSagaXTask) TaskName() string { return "x" }
 
 type testSagaCompensateXTask struct {
 	Value string `json:"value"`
 }
 
-func (t *testSagaCompensateXTask) TaskName() string { return "tasks.compensate_x" }
+func (t *testSagaCompensateXTask) TaskName() string { return "compensate_x" }
 
 type testSagaYTask struct {
 	Value string `json:"value"`
 }
 
-func (t *testSagaYTask) TaskName() string { return "tasks.y" }
+func (t *testSagaYTask) TaskName() string { return "y" }
 
 type testSagaCompensateYTask struct {
 	Value string `json:"value"`
 }
 
-func (t *testSagaCompensateYTask) TaskName() string { return "tasks.compensate_y" }
+func (t *testSagaCompensateYTask) TaskName() string { return "compensate_y" }
 
 type testSagaZTask struct {
 	Value string `json:"value"`
 }
 
-func (t *testSagaZTask) TaskName() string { return "tasks.z" }
+func (t *testSagaZTask) TaskName() string { return "z" }

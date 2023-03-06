@@ -30,13 +30,13 @@ type chargeCustomerTask struct {
 	Amount       int64  `json:"amount"`
 }
 
-func (t *chargeCustomerTask) TaskName() string { return "tasks.charge_customer" }
+func (t *chargeCustomerTask) TaskName() string { return "charge_customer" }
 
 type rollbackChargeCustomerTask struct {
 	ChargeUUID string `json:"charge_uuid"`
 }
 
-func (t *rollbackChargeCustomerTask) TaskName() string { return "tasks.rollback_charge_customer" }
+func (t *rollbackChargeCustomerTask) TaskName() string { return "rollback_charge_customer" }
 
 // step: send receipt
 type sendReceiptTask struct {
@@ -44,7 +44,7 @@ type sendReceiptTask struct {
 	Amount       int64  `json:"amount"`
 }
 
-func (t *sendReceiptTask) TaskName() string { return "tasks.send_receipt" }
+func (t *sendReceiptTask) TaskName() string { return "send_receipt" }
 
 // handlers
 // ---

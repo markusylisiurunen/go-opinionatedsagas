@@ -3,6 +3,7 @@ package opinionatedsagas
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	events "github.com/markusylisiurunen/go-opinionatedevents"
 )
@@ -88,5 +89,5 @@ func (t *taskMessage) MarshalPayload() ([]byte, error)    { return json.Marshal(
 func (t *taskMessage) UnmarshalPayload(data []byte) error { return json.Unmarshal(data, t) }
 
 func (t *taskMessage) toOpinionatedMessage() (*events.Message, error) {
-	return events.NewMessage(t.TaskName(), t)
+	return events.NewMessage(fmt.Sprintf("tasks.%s", t.TaskName()), t)
 }

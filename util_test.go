@@ -22,7 +22,7 @@ func newTestTask(name string, value string) *testTask {
 }
 
 func (t *testTask) TaskName() string {
-	return fmt.Sprintf("tasks.%s", t.name)
+	return t.name
 }
 
 // a simple in-memory publisher destination for testing
@@ -104,7 +104,7 @@ func newTestDelivery(attempt int, rollbackStackSize int) *testDelivery {
 	}
 	// construct the task message
 	taskMsg := newTaskMessageWithRollbackHistory(newTestTask("test", "test"), rollbackStack)
-	msg, err := events.NewMessage(taskMsg.TaskName(), taskMsg)
+	msg, err := events.NewMessage(fmt.Sprintf("tasks.%s", taskMsg.TaskName()), taskMsg)
 	if err != nil {
 		panic(err)
 	}

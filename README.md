@@ -35,7 +35,7 @@ type DoX struct {
 }
 
 func (t *DoX) TaskName() string {
-  return "tasks.do_x"
+  return "do_x"
 }
 
 type CompensateX struct {
@@ -43,7 +43,7 @@ type CompensateX struct {
 }
 
 func (t *CompensateX) TaskName() string {
-  return "tasks.compensate_x"
+  return "compensate_x"
 }
 
 type DoY struct {
@@ -51,7 +51,7 @@ type DoY struct {
 }
 
 func (t *DoY) TaskName() string {
-  return "tasks.do_y"
+  return "do_y"
 }
 
 func Example(ctx context.Context, connectionString string) error {

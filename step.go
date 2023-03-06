@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -169,7 +170,7 @@ func (s *Step) mountHandleFunc() error {
 		// return the result
 		return result
 	}
-	return s.receiver.On(s.queue, name,
+	return s.receiver.On(s.queue, fmt.Sprintf("tasks.%s", name),
 		middlewares{
 			// 10s, 15s, 30s, 1m21s, 4m11s, 13m35s, 30m0s, 30m0s
 			events.WithBackoff(events.ExponentialBackoff(10, 2, 1.2, 30*time.Minute)),
@@ -223,7 +224,7 @@ func (s *Step) mountCompensateFunc() error {
 		// return the result
 		return result
 	}
-	return s.receiver.On(s.queue, name,
+	return s.receiver.On(s.queue, fmt.Sprintf("tasks.%s", name),
 		middlewares{
 			// 10s, 15s, 30s, 1m21s, 4m11s, 13m35s, 30m0s, 30m0s
 			events.WithBackoff(events.ExponentialBackoff(10, 2, 1.2, 30*time.Minute)),

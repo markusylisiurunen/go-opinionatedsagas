@@ -19,7 +19,7 @@ func TestTaskMessage(t *testing.T) {
 		assert.NoError(t, json.Unmarshal(data, task))
 		assert.Equal(t, 0, len(task.Meta))
 		assert.Equal(t, 1, len(task.RollbackStack.stack))
-		assert.Equal(t, "tasks.test", task.TaskName())
+		assert.Equal(t, "test", task.TaskName())
 		assert.Equal(t, "hello world", task.Task.(*testTask).Value)
 	})
 
@@ -35,12 +35,12 @@ func TestTaskMessage(t *testing.T) {
 		// fake a rollback call and assert the result
 		rollbackTo, ok := task.rollback()
 		assert.True(t, ok)
-		assert.Equal(t, "tasks.test", rollbackTo.TaskName())
+		assert.Equal(t, "test", rollbackTo.TaskName())
 		assert.Equal(t, "compensate_2", rollbackTo.Task.(*anyTask).task["value"])
 		// assert the remaining rollback stack by rolling back again
 		nextRollbackTo, ok := rollbackTo.rollback()
 		assert.True(t, ok)
-		assert.Equal(t, "tasks.test", nextRollbackTo.TaskName())
+		assert.Equal(t, "test", nextRollbackTo.TaskName())
 		assert.Equal(t, "compensate_1", nextRollbackTo.Task.(*anyTask).task["value"])
 	})
 
@@ -65,14 +65,14 @@ func TestTaskMessage(t *testing.T) {
 		task, ok := task.rollback()
 		assert.True(t, ok)
 		task = serializeAndDeserialize(task)
-		assert.Equal(t, "tasks.test", task.TaskName())
+		assert.Equal(t, "test", task.TaskName())
 		assert.Equal(t, "compensate_2", task.Task.(*testTask).Value)
 		task = serializeAndDeserialize(task)
 		// second rollback
 		task, ok = task.rollback()
 		assert.True(t, ok)
 		task = serializeAndDeserialize(task)
-		assert.Equal(t, "tasks.test", task.TaskName())
+		assert.Equal(t, "test", task.TaskName())
 		assert.Equal(t, "compensate_1", task.Task.(*testTask).Value)
 		task = serializeAndDeserialize(task)
 		// third rollback (there's nothing to roll back to)
