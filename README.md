@@ -60,22 +60,22 @@ func Example(ctx context.Context, connectionString string) error {
     return err
   }
   saga.AddStep(&sagas.Step{
-    HandleFunc: func(ctx context.Context, task *DoX) (sagas.Result, *CompensateX, *DoY) {
-      return sagas.Success(), &CompensateX{X: task.X}, &DoY{Y: 42}
+    HandleFunc: func(ctx context.Context, task *DoX) (*CompensateX, *DoY, error) {
+      return &CompensateX{X: task.X}, &DoY{Y: 42}, nil
     },
-    CompensateFunc: func(ctx context.Context, task *CompensateX) sagas.Result {
-      return sagas.Success()
+    CompensateFunc: func(ctx context.Context, task *CompensateX) error {
+      return nil
     },
   })
   saga.AddStep(&sagas.Step{
     MaxAttempts: 3,
-    HandleFunc: func(ctx context.Context, task *DoY) sagas.Result {
+    HandleFunc: func(ctx context.Context, task *DoY) error {
       if rand.Float64() <= 0.33 {
         // if an error occurs (too many times), the saga will roll back and the previous
         // steps' `CompensateFunc`s will be invoked.
-        return sagas.Error(errors.New("something went wrong"), 15*time.Second)
+        return errors.New("something went wrong")
       }
-      return sagas.Success()
+      return nil
     },
   })
   err = saga.RegisterHandlers()
