@@ -29,20 +29,18 @@ func TestWithIdempotentSequentially(t *testing.T) {
 	for i := 0; i < 3; i += 1 {
 		// init a handler
 		var handlerCount atomic.Int64
-		var handler events.OnMessageHandler = func(
-			ctx context.Context, queue string, delivery events.Delivery,
-		) events.ResultContainer {
+		var handler events.OnMessageHandler = func(ctx context.Context, delivery events.Delivery) error {
 			handlerCount.Add(1)
-			return events.SuccessResult()
+			return nil
 		}
 		// execute the (wrapped) handler `n` times
 		var successCount atomic.Int64
 		var failureCount atomic.Int64
 		wrapped := withIdempotent(db, schema)(handler)
-		delivery := newTestDelivery(1, 0)
+		delivery := newTestDelivery(1, "tasks", 0)
 		for i := 0; i < 32; i += 1 {
-			result := wrapped(context.Background(), "tasks", delivery)
-			if result.GetResult().Err != nil {
+			result := wrapped(context.Background(), delivery)
+			if result != nil {
 				failureCount.Add(1)
 			} else {
 				successCount.Add(1)
@@ -71,21 +69,19 @@ func TestWithIdempotentConcurrently(t *testing.T) {
 	for i := 0; i < 3; i += 1 {
 		// init a handler
 		var handlerCount atomic.Int64
-		var handler events.OnMessageHandler = func(
-			ctx context.Context, queue string, delivery events.Delivery,
-		) events.ResultContainer {
+		var handler events.OnMessageHandler = func(ctx context.Context, delivery events.Delivery) error {
 			handlerCount.Add(1)
-			return events.SuccessResult()
+			return nil
 		}
 		// execute the (wrapped) handler `n` times
 		wrapped := withIdempotent(db, schema)(handler)
-		delivery := newTestDelivery(1, 0)
+		delivery := newTestDelivery(1, "tasks", 0)
 		var wg sync.WaitGroup
 		for i := 0; i < 64; i += 1 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				wrapped(context.Background(), "tasks", delivery)
+				wrapped(context.Background(), delivery) //nolint
 			}()
 		}
 		wg.Wait()

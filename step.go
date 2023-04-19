@@ -70,21 +70,21 @@ func (s *Step) handleFuncIsValid() error {
 		}
 		// validate the case of 2 -> 1
 		if outCount == 1 {
-			if !isInterface[events.ResultContainer](funcValue.Type().Out(0)) {
-				return errors.New("the first handle func return value must implement 'opinionatedevents.ResultContainer'")
+			if !isInterface[error](funcValue.Type().Out(0)) {
+				return errors.New("the first handle func return value must implement 'error'")
 			}
 			return nil
 		}
 		// validate the case of 2 -> 3
 		if outCount == 3 {
-			if !isInterface[events.ResultContainer](funcValue.Type().Out(0)) {
-				return errors.New("the first handle func return value must implement 'opinionatedevents.ResultContainer'")
+			if !isInterface[task](funcValue.Type().Out(0)) {
+				return errors.New("the first handle func return value must implement 'task'")
 			}
 			if !isInterface[task](funcValue.Type().Out(1)) {
 				return errors.New("the second handle func return value must implement 'task'")
 			}
-			if !isInterface[task](funcValue.Type().Out(2)) {
-				return errors.New("the third handle func return value must implement 'task'")
+			if !isInterface[error](funcValue.Type().Out(2)) {
+				return errors.New("the third handle func return value must implement 'error'")
 			}
 			return nil
 		}
@@ -108,8 +108,8 @@ func (s *Step) compensateFuncIsValid() error {
 		if !isInterface[task](funcValue.Type().In(1)) {
 			return errors.New("the second compensate func argument must implement 'task'")
 		}
-		if !isInterface[events.ResultContainer](funcValue.Type().Out(0)) {
-			return errors.New("the first compensate func return value must implement 'events.ResultContainer'")
+		if !isInterface[error](funcValue.Type().Out(0)) {
+			return errors.New("the first compensate func return value must implement 'error'")
 		}
 		return nil
 	}
@@ -118,35 +118,46 @@ func (s *Step) compensateFuncIsValid() error {
 
 func (s *Step) mountHandleFunc() error {
 	name := reflect.New(reflect.ValueOf(s.HandleFunc).Type().In(1).Elem()).Interface().(task).TaskName()
-	handle := func(ctx context.Context, _ string, delivery events.Delivery) result {
+	handle := func(ctx context.Context, delivery events.Delivery) error {
 		handleFuncValue := reflect.ValueOf(s.HandleFunc)
 		handleFuncTaskType := handleFuncValue.Type().In(1)
 		// initialize an empty task (based on the handle func's parameter type)
 		taskMessage := newTaskMessage(reflect.New(handleFuncTaskType.Elem()).Interface().(task))
 		// attempt to parse the payload
-		if err := delivery.GetMessage().Payload(taskMessage); err != nil {
+		if err := delivery.GetMessage().GetPayload(taskMessage); err != nil {
 			// TODO: what to do if the message could not be parsed?
-			return events.ErrorResult(err, 30*time.Second)
+			return err
 		}
 		// execute the handle func with the task
 		outValue := reflect.ValueOf(s.HandleFunc).Call([]reflect.Value{
 			reflect.ValueOf(ctx),
 			reflect.ValueOf(taskMessage.Task),
 		})
-		resultValue := outValue[0]
-		// check the result, if it's not success, return it right away
-		result := resultValue.Interface().(result)
-		if result.GetResult().Err != nil {
-			return result
-		}
-		// if the handler only returned the result, just return the result
+		var (
+			resultValue         reflect.Value
+			compensateTaskValue reflect.Value
+			nextTaskValue       reflect.Value
+		)
 		if len(outValue) == 1 {
-			return result
+			resultValue = outValue[0]
+			// check the result, if it's not success, return it right away
+			if !resultValue.IsNil() {
+				return resultValue.Interface().(error)
+			}
+			return nil
 		}
-		compensateTaskValue, nextTaskValue := outValue[1], outValue[2]
+		if len(outValue) == 3 {
+			compensateTaskValue = outValue[0]
+			nextTaskValue = outValue[1]
+			resultValue = outValue[2]
+			// check the result, if it's not success, return it right away
+			if !resultValue.IsNil() {
+				return resultValue.Interface().(error)
+			}
+		}
 		// if there is no next task to be published, just return the result
 		if nextTaskValue.IsNil() {
-			return result
+			return nil
 		}
 		// construct and publish the next task
 		rollbackHistory := taskMessage.RollbackStack.copy()
@@ -161,14 +172,14 @@ func (s *Step) mountHandleFunc() error {
 		nextTaskOpinionatedMessage, err := nextTaskMessage.toOpinionatedMessage()
 		if err != nil {
 			// FIXME: this entire function must be somehow atomic
-			return events.ErrorResult(err, 30*time.Second)
+			return err
 		}
 		if err := s.publisher.Publish(ctx, nextTaskOpinionatedMessage); err != nil {
 			// FIXME: this entire function must be somehow atomic
-			return events.ErrorResult(err, 30*time.Second)
+			return err
 		}
 		// return the result
-		return result
+		return nil
 	}
 	return s.receiver.On(s.queue, fmt.Sprintf("tasks.%s", name),
 		middlewares{
@@ -186,15 +197,15 @@ func (s *Step) mountCompensateFunc() error {
 		return nil
 	}
 	name := reflect.New(reflect.ValueOf(s.CompensateFunc).Type().In(1).Elem()).Interface().(task).TaskName()
-	handle := func(ctx context.Context, _ string, delivery events.Delivery) result {
+	handle := func(ctx context.Context, delivery events.Delivery) error {
 		compensateFuncValue := reflect.ValueOf(s.CompensateFunc)
 		compensateFuncTaskType := compensateFuncValue.Type().In(1)
 		// initialize an empty task (based on the handle func's parameter type)
 		taskMessage := newTaskMessage(reflect.New(compensateFuncTaskType.Elem()).Interface().(task))
 		// attempt to parse the payload
-		if err := delivery.GetMessage().Payload(taskMessage); err != nil {
+		if err := delivery.GetMessage().GetPayload(taskMessage); err != nil {
 			// TODO: what to do if the message could not be parsed?
-			return events.ErrorResult(err, 30*time.Second)
+			return err
 		}
 		// execute the handle func with the task
 		outValue := reflect.ValueOf(s.CompensateFunc).Call([]reflect.Value{
@@ -203,26 +214,25 @@ func (s *Step) mountCompensateFunc() error {
 		})
 		resultValue := outValue[0]
 		// check the result, if it's not success, return it right away
-		result := resultValue.Interface().(result)
-		if result.GetResult().Err != nil {
-			return result
+		if !resultValue.IsNil() {
+			return resultValue.Interface().(error)
 		}
 		// success, publish the next rollback message from the stack
 		rollbackMessage, ok := taskMessage.rollback()
 		if !ok {
-			return result
+			return nil
 		}
 		rollbackOpinionatedMessage, err := rollbackMessage.toOpinionatedMessage()
 		if err != nil {
 			// FIXME: this entire function must be somehow atomic
-			return events.ErrorResult(err, 30*time.Second)
+			return err
 		}
 		if err := s.publisher.Publish(ctx, rollbackOpinionatedMessage); err != nil {
 			// FIXME: this entire function must be somehow atomic
-			return events.ErrorResult(err, 30*time.Second)
+			return err
 		}
 		// return the result
-		return result
+		return nil
 	}
 	return s.receiver.On(s.queue, fmt.Sprintf("tasks.%s", name),
 		middlewares{

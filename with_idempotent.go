@@ -192,9 +192,9 @@ func withIdempotent(db *sql.DB, schema string) events.OnMessageMiddleware {
 		keepLockedFor: 10 * time.Second,
 	}
 	return func(next events.OnMessageHandler) events.OnMessageHandler {
-		return func(ctx context.Context, queue string, delivery events.Delivery) result {
+		return func(ctx context.Context, delivery events.Delivery) error {
 			// use the task's UUID as the idempotency key
-			key := delivery.GetMessage().UUID
+			key := delivery.GetMessage().GetUUID()
 			// attempt to acquire the idempotency key (retry `n` times if needed)
 			var err error
 			for i := 0; i < 3; i += 1 {
@@ -209,23 +209,23 @@ func withIdempotent(db *sql.DB, schema string) events.OnMessageMiddleware {
 				}
 				if err == errIdempotencyKeyRepositoryIsLocked {
 					// the task is currently locked by another worker -> should retry after a while (this should not happen in reality)
-					return events.ErrorResult(errBeingProcessed, 10*time.Second)
+					return errBeingProcessed
 				}
 				if err == errIdempotencyKeyRepositoryIsProcessed {
 					// the task has already been processed -> can be marked as successful
-					return events.SuccessResult()
+					return nil
 				}
-				return events.ErrorResult(errLockNotAcquired, 10*time.Second)
+				return errLockNotAcquired
 			}
 			if err != nil {
 				if err == errIdempotencyKeyRepositorySerialization {
-					return events.ErrorResult(errBeingProcessed, 10*time.Second)
+					return errBeingProcessed
 				}
-				return events.ErrorResult(errLockNotAcquired, 10*time.Second)
+				return errLockNotAcquired
 			}
 			// the idempotency lock was acquired, execute the handler
-			result := next(ctx, queue, delivery)
-			if result.GetResult().Err != nil {
+			result := next(ctx, delivery)
+			if result != nil {
 				// the handler returned an error, release the idempotency key lock
 				if err := repo.rollback(ctx, key); err != nil { //nolint
 					// NOTE: nothing can really be done here, the lock will be released after a few seconds

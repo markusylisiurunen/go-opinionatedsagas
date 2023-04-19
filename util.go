@@ -4,11 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
-
-	events "github.com/markusylisiurunen/go-opinionatedevents"
 )
-
-type result = events.ResultContainer
 
 func isInterface[T any](t reflect.Type) bool {
 	return t.Implements(reflect.TypeOf((*T)(nil)).Elem())

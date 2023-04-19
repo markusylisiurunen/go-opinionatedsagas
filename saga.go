@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	events "github.com/markusylisiurunen/go-opinionatedevents"
@@ -25,10 +24,8 @@ type Saga struct {
 
 type SagaOpts struct {
 	ConnectionString string
+	DB               *sql.DB
 	Schema           string
-
-	//FIXME: support passing a *sql.DB
-	DB *sql.DB
 }
 
 func (o *SagaOpts) getSchema() string {
@@ -38,6 +35,7 @@ func (o *SagaOpts) getSchema() string {
 	return "opinionatedsagas"
 }
 
+// FIXME: this entire function (and the co-existing with `opinionatedevents`) needs some love
 func NewSaga(ctx context.Context, opts *SagaOpts) (*Saga, error) {
 	// initialise the database connection (if needed)
 	var db *sql.DB
@@ -56,13 +54,9 @@ func NewSaga(ctx context.Context, opts *SagaOpts) (*Saga, error) {
 		}
 		db = _db
 	}
-	if err := migrate(db, opts.getSchema()); err != nil {
-		return nil, err
-	}
 	// initialise the publisher
-	destination, err := events.NewPostgresDestination(opts.ConnectionString,
-		events.PostgresDestinationWithTopicToQueues("tasks", "tasks"),
-		events.PostgresDestinationWithTableName(fmt.Sprintf("%s.events", opts.getSchema())),
+	destination, err := events.NewPostgresDestination(db,
+		events.PostgresDestinationWithSchema(opts.getSchema()),
 	)
 	if err != nil {
 		return nil, err
@@ -72,17 +66,27 @@ func NewSaga(ctx context.Context, opts *SagaOpts) (*Saga, error) {
 		return nil, err
 	}
 	// initialise the receiver
-	receiver, err := events.NewReceiver()
+	source, err := events.NewPostgresSource(db,
+		events.PostgresSourceWithIntervalTrigger(1*time.Second),
+		events.PostgresSourceWithMaxWorkers(16),
+		events.PostgresSourceWithNotifyTrigger(opts.ConnectionString),
+		events.PostgresSourceWithSchema(opts.getSchema()),
+	)
 	if err != nil {
 		return nil, err
 	}
-	_, err = events.MakeReceiveFromPostgres(ctx, receiver, opts.ConnectionString,
-		events.ReceiveFromPostgresWithQueues("tasks"),
-		events.ReceiveFromPostgresWithTableName(fmt.Sprintf("%s.events", opts.getSchema())),
-		events.ReceiveFromPostgresWithIntervalTrigger(5*time.Second),
-		events.ReceiveFromPostgresWithNotifyTrigger("__events"),
-	)
+	if err := source.QueueDeclare(&events.PostgresSourceQueueDeclareParams{
+		Topic: "tasks",
+		Queue: "tasks",
+	}); err != nil {
+		return nil, err
+	}
+	receiver, err := events.NewReceiver(events.ReceiverWithSource(source))
 	if err != nil {
+		return nil, err
+	}
+	// FIXME: the migrations from sagas and events must somehow co-exist and not collide... (e.g. both must be able to have migrations 000001, 000002 etc.)
+	if err := migrate(db, opts.getSchema()); err != nil {
 		return nil, err
 	}
 	// construct the saga
@@ -118,6 +122,10 @@ func (s *Saga) RegisterHandlers() error {
 		if err := step.mountCompensateFunc(); err != nil {
 			return err
 		}
+	}
+	// FIXME: come on... not the `context.Background()`
+	if err := s.receiver.Start(context.Background()); err != nil {
+		return err
 	}
 	return nil
 }

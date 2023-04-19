@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"testing"
-	"time"
 
 	events "github.com/markusylisiurunen/go-opinionatedevents"
 	"github.com/stretchr/testify/assert"
@@ -20,15 +19,15 @@ func TestWithRollback(t *testing.T) {
 		assert.NoError(t, err)
 		// initialise the rollback middleware
 		middleware := withRollback(publisher, 0)(
-			func(ctx context.Context, queue string, delivery events.Delivery) result {
-				return events.ErrorResult(errors.New("not implemented"), 1*time.Second)
+			func(ctx context.Context, delivery events.Delivery) error {
+				return errors.New("not implemented")
 			},
 		)
 		// attempt to handle the task `n` times
 		for i := 0; i < 99; i += 1 {
-			result := middleware(context.Background(), "tasks", newTestDelivery(i+1, 0))
-			assert.Error(t, result.GetResult().Err)
-			assert.False(t, result.GetResult().RetryAt.IsZero())
+			result := middleware(context.Background(), newTestDelivery(i+1, "tasks", 0))
+			assert.Error(t, result)
+			assert.False(t, events.IsFatal(result))
 			assert.Len(t, destination.messages, 0)
 		}
 	})
@@ -40,19 +39,19 @@ func TestWithRollback(t *testing.T) {
 		assert.NoError(t, err)
 		// initialise the rollback middleware
 		middleware := withRollback(publisher, 2)(
-			func(ctx context.Context, queue string, delivery events.Delivery) result {
-				return events.ErrorResult(errors.New("not implemented"), 1*time.Second)
+			func(ctx context.Context, delivery events.Delivery) error {
+				return errors.New("not implemented")
 			},
 		)
 		// first attempt
-		result1 := middleware(context.Background(), "tasks", newTestDelivery(1, 0))
-		assert.Error(t, result1.GetResult().Err)
-		assert.False(t, result1.GetResult().RetryAt.IsZero())
+		result1 := middleware(context.Background(), newTestDelivery(1, "tasks", 0))
+		assert.Error(t, result1)
+		assert.False(t, events.IsFatal(result1))
 		assert.Len(t, destination.messages, 0)
 		// second attempt
-		result2 := middleware(context.Background(), "tasks", newTestDelivery(2, 0))
-		assert.Error(t, result2.GetResult().Err)
-		assert.True(t, result2.GetResult().RetryAt.IsZero())
+		result2 := middleware(context.Background(), newTestDelivery(2, "tasks", 0))
+		assert.Error(t, result2)
+		assert.True(t, events.IsFatal(result2))
 		assert.Len(t, destination.messages, 0)
 	})
 
@@ -63,14 +62,14 @@ func TestWithRollback(t *testing.T) {
 		assert.NoError(t, err)
 		// initialise the rollback middleware
 		middleware := withRollback(publisher, 2)(
-			func(ctx context.Context, queue string, delivery events.Delivery) result {
-				return events.FatalResult(errors.New("not implemented"))
+			func(ctx context.Context, delivery events.Delivery) error {
+				return events.Fatal(errors.New("not implemented"))
 			},
 		)
 		// first attempt
-		result1 := middleware(context.Background(), "tasks", newTestDelivery(1, 1))
-		assert.Error(t, result1.GetResult().Err)
-		assert.True(t, result1.GetResult().RetryAt.IsZero())
+		result1 := middleware(context.Background(), newTestDelivery(1, "tasks", 1))
+		assert.Error(t, result1)
+		assert.True(t, events.IsFatal(result1))
 		assert.Len(t, destination.messages, 1)
 		// validate the published message
 		rollbackTaskName := gjson.Get(string(destination.messages[0]), "name").String()
@@ -90,19 +89,19 @@ func TestWithRollback(t *testing.T) {
 		assert.NoError(t, err)
 		// initialise the rollback middleware
 		middleware := withRollback(publisher, 2)(
-			func(ctx context.Context, queue string, delivery events.Delivery) result {
-				return events.ErrorResult(errors.New("not implemented"), 1*time.Second)
+			func(ctx context.Context, delivery events.Delivery) error {
+				return errors.New("not implemented")
 			},
 		)
 		// first attempt
-		result1 := middleware(context.Background(), "tasks", newTestDelivery(1, 1))
-		assert.Error(t, result1.GetResult().Err)
-		assert.False(t, result1.GetResult().RetryAt.IsZero())
+		result1 := middleware(context.Background(), newTestDelivery(1, "tasks", 1))
+		assert.Error(t, result1)
+		assert.False(t, events.IsFatal(result1))
 		assert.Len(t, destination.messages, 0)
 		// second attempt
-		result2 := middleware(context.Background(), "tasks", newTestDelivery(2, 1))
-		assert.Error(t, result2.GetResult().Err)
-		assert.True(t, result2.GetResult().RetryAt.IsZero())
+		result2 := middleware(context.Background(), newTestDelivery(2, "tasks", 1))
+		assert.Error(t, result2)
+		assert.True(t, events.IsFatal(result2))
 		assert.Len(t, destination.messages, 1)
 		// validate the published message
 		rollbackTaskName := gjson.Get(string(destination.messages[0]), "name").String()
@@ -123,29 +122,29 @@ func TestWithRollback(t *testing.T) {
 		// initialise the rollback middleware
 		count := 0
 		middleware := withRollback(publisher, 1)(
-			func(ctx context.Context, queue string, delivery events.Delivery) result {
+			func(ctx context.Context, delivery events.Delivery) error {
 				count += 1
-				return events.FatalResult(errors.New("not implemented"))
+				return events.Fatal(errors.New("not implemented"))
 			},
 		)
 		// first attempt
 		destination.err = errors.New("cannot publish the message")
-		result1 := middleware(context.Background(), "tasks", newTestDelivery(1, 1))
+		result1 := middleware(context.Background(), newTestDelivery(1, "tasks", 1))
 		// --> the handler should have been called once
 		assert.Equal(t, 1, count)
 		// --> the result should be an error but NOT fatal
-		assert.Error(t, result1.GetResult().Err)
-		assert.False(t, result1.GetResult().RetryAt.IsZero())
+		assert.Error(t, result1)
+		assert.False(t, events.IsFatal(result1))
 		// --> no message should have been published
 		assert.Len(t, destination.messages, 0)
 		// second attempt
 		destination.err = nil
-		result2 := middleware(context.Background(), "tasks", newTestDelivery(2, 1))
+		result2 := middleware(context.Background(), newTestDelivery(2, "tasks", 1))
 		// --> the handler must not be called more than once across the two attempts
 		assert.Equal(t, 1, count)
 		// --> the result should be a fatal error
-		assert.Error(t, result2.GetResult().Err)
-		assert.True(t, result2.GetResult().RetryAt.IsZero())
+		assert.Error(t, result2)
+		assert.True(t, events.IsFatal(result2))
 		// --> the rollback message must have been published
 		assert.Len(t, destination.messages, 1)
 		// validate the published message

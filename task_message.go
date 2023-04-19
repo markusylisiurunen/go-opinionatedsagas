@@ -84,10 +84,6 @@ func (t *taskMessage) asRollbackStackItem() *rollbackStackItem {
 	return &rollbackStackItem{Name: t.TaskName(), Meta: t.Meta, Task: task}
 }
 
-// TODO: remove these once go-opinionatedevents won't require them anymore
-func (t *taskMessage) MarshalPayload() ([]byte, error)    { return json.Marshal(t) }
-func (t *taskMessage) UnmarshalPayload(data []byte) error { return json.Unmarshal(data, t) }
-
 func (t *taskMessage) toOpinionatedMessage() (*events.Message, error) {
 	return events.NewMessage(fmt.Sprintf("tasks.%s", t.TaskName()), t)
 }

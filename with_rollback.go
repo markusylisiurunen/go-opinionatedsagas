@@ -3,7 +3,6 @@ package opinionatedsagas
 import (
 	"context"
 	"errors"
-	"time"
 
 	events "github.com/markusylisiurunen/go-opinionatedevents"
 )
@@ -11,43 +10,42 @@ import (
 func withRollback(
 	publisher *events.Publisher, limit int,
 ) events.OnMessageMiddleware {
-	doRollback := func(ctx context.Context, delivery events.Delivery) result {
-		delay := 10 * time.Second
+	doRollback := func(ctx context.Context, delivery events.Delivery) error {
 		// parse the message payload
 		msg := newTaskMessage(&noopTask{})
-		if err := delivery.GetMessage().Payload(msg); err != nil {
-			return events.ErrorResult(err, delay)
+		if err := delivery.GetMessage().GetPayload(msg); err != nil {
+			return err
 		}
 		// publish the rollback message
 		rollback, ok := msg.rollback()
 		if !ok {
 			// the rollback stack is empty, processing is done
 			err := errors.New("processing the task failed, nothing to roll back")
-			return events.FatalResult(err)
+			return events.Fatal(err)
 		}
 		opinionatedRollback, err := rollback.toOpinionatedMessage()
 		if err != nil {
-			return events.ErrorResult(err, delay)
+			return err
 		}
 		if err := publisher.Publish(ctx, opinionatedRollback); err != nil {
-			return events.ErrorResult(err, delay)
+			return err
 		}
 		err = errors.New("processing the task failed, rolling back")
-		return events.FatalResult(err)
+		return events.Fatal(err)
 	}
 	return func(next events.OnMessageHandler) events.OnMessageHandler {
-		return func(ctx context.Context, queue string, delivery events.Delivery) result {
+		return func(ctx context.Context, delivery events.Delivery) error {
 			if limit != 0 && delivery.GetAttempt() > limit {
 				// processing the message has already been attempted `limit` many times
 				return doRollback(ctx, delivery)
 			}
 			// try to process the message
-			result := next(ctx, queue, delivery)
-			if result.GetResult().Err != nil && result.GetResult().RetryAt.IsZero() {
+			result := next(ctx, delivery)
+			if result != nil && events.IsFatal(result) {
 				// fatal error, should roll back immediately
 				return doRollback(ctx, delivery)
 			}
-			if result.GetResult().Err != nil && limit > 0 && delivery.GetAttempt() >= limit {
+			if result != nil && limit > 0 && delivery.GetAttempt() >= limit {
 				// retriable error, but has failed too many times
 				return doRollback(ctx, delivery)
 			}

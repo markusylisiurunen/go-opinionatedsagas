@@ -91,10 +91,11 @@ func (d *testDestination) getRollbackStackTaskName(messageIdx int, stackIdx int)
 
 type testDelivery struct {
 	attempt int
+	queue   string
 	msg     *events.Message
 }
 
-func newTestDelivery(attempt int, rollbackStackSize int) *testDelivery {
+func newTestDelivery(attempt int, queue string, rollbackStackSize int) *testDelivery {
 	// construct the rollback stack
 	rollbackStack := newRollbackStack()
 	for i := 0; i < rollbackStackSize; i += 1 {
@@ -108,15 +109,19 @@ func newTestDelivery(attempt int, rollbackStackSize int) *testDelivery {
 	if err != nil {
 		panic(err)
 	}
-	return &testDelivery{attempt: attempt, msg: msg}
+	return &testDelivery{attempt: attempt, queue: queue, msg: msg}
 }
 
-func newTestDeliveryRaw(attempt int, msg *events.Message) *testDelivery {
-	return &testDelivery{attempt: attempt, msg: msg}
+func newTestDeliveryRaw(attempt int, queue string, msg *events.Message) *testDelivery {
+	return &testDelivery{attempt: attempt, queue: queue, msg: msg}
 }
 
 func (d *testDelivery) GetAttempt() int {
 	return d.attempt
+}
+
+func (d *testDelivery) GetQueue() string {
+	return d.queue
 }
 
 func (d *testDelivery) GetMessage() *events.Message {

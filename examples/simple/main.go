@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	events "github.com/markusylisiurunen/go-opinionatedevents"
 	sagas "github.com/markusylisiurunen/go-opinionatedsagas"
 
 	_ "github.com/lib/pq"
@@ -49,35 +49,38 @@ func (t *sendReceiptTask) TaskName() string { return "send_receipt" }
 // handlers
 // ---
 
-type result = events.ResultContainer
-
-func handleChargeCustomerTask(ctx context.Context, msg *chargeCustomerTask) (result, *rollbackChargeCustomerTask, *sendReceiptTask) {
+func handleChargeCustomerTask(ctx context.Context, msg *chargeCustomerTask) (*rollbackChargeCustomerTask, *sendReceiptTask, error) {
 	fmt.Println("handle charge customer task was invoked")
 	rollback := &rollbackChargeCustomerTask{ChargeUUID: uuid.NewString()}
 	next := &sendReceiptTask{CustomerUUID: msg.CustomerUUID, Amount: msg.Amount}
-	return events.SuccessResult(), rollback, next
+	return rollback, next, nil
 }
 
-func handleRollbackChargeCustomerTask(ctx context.Context, msg *rollbackChargeCustomerTask) result {
+func handleRollbackChargeCustomerTask(ctx context.Context, msg *rollbackChargeCustomerTask) error {
 	fmt.Println("rollback charge customer task was invoked")
-	return events.SuccessResult()
+	return nil
 }
 
-func handleSendReceiptTask(ctx context.Context, msg *sendReceiptTask) result {
+func handleSendReceiptTask(ctx context.Context, msg *sendReceiptTask) error {
 	fmt.Println("handle send receipt task was invoked")
 	if rand.Intn(100) < 50 {
 		fmt.Println("simulated error from sending a receipt")
-		return events.ErrorResult(errors.New(""), time.Second)
+		return errors.New("something happened")
 	}
-	return events.SuccessResult()
+	return nil
 }
 
 // register steps
 // ---
 
 func registerSaga(ctx context.Context) error {
+	db, err := sql.Open("postgres", connectionString)
+	if err != nil {
+		return err
+	}
 	saga, err := sagas.NewSaga(ctx, &sagas.SagaOpts{
 		ConnectionString: connectionString,
+		DB:               db,
 		Schema:           "opinionatedsagas_test_01",
 	})
 	if err != nil {

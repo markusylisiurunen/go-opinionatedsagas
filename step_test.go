@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	events "github.com/markusylisiurunen/go-opinionatedevents"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,43 +15,43 @@ func TestStepHandleFuncValidation(t *testing.T) {
 	}{
 		{
 			name: "a valid handle func",
-			handleFunc: func(ctx context.Context, task *testFuncTask) (result, *testFuncTask, *testFuncTask) {
-				return events.SuccessResult(), &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}
+			handleFunc: func(ctx context.Context, task *testFuncTask) (*testFuncTask, *testFuncTask, error) {
+				return &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}, nil
 			},
 			expectedToBeOk: true,
 		},
 		{
-			name: "a valid handle func returning only result",
-			handleFunc: func(ctx context.Context, task *testFuncTask) result {
-				return events.SuccessResult()
+			name: "a valid handle func returning only error",
+			handleFunc: func(ctx context.Context, task *testFuncTask) error {
+				return nil
 			},
 			expectedToBeOk: true,
 		},
 		{
 			name: "handle func with no arguments",
-			handleFunc: func() (result, *testFuncTask, *testFuncTask) {
-				return events.SuccessResult(), &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}
+			handleFunc: func() (*testFuncTask, *testFuncTask, error) {
+				return &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}, nil
 			},
 			expectedToBeOk: false,
 		},
 		{
 			name: "handle func with only context argument",
-			handleFunc: func(ctx context.Context) (result, *testFuncTask, *testFuncTask) {
-				return events.SuccessResult(), &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}
+			handleFunc: func(ctx context.Context) (*testFuncTask, *testFuncTask, error) {
+				return &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}, nil
 			},
 			expectedToBeOk: false,
 		},
 		{
 			name: "handle func with task not implementing the interface",
-			handleFunc: func(ctx context.Context, task *notTestFuncTask) (result, *testFuncTask, *testFuncTask) {
-				return events.SuccessResult(), &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}
+			handleFunc: func(ctx context.Context, task *notTestFuncTask) (*testFuncTask, *testFuncTask, error) {
+				return &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}, nil
 			},
 			expectedToBeOk: false,
 		},
 		{
 			name: "handle func with non-pointer task",
-			handleFunc: func(ctx context.Context, task testFuncTask) (result, *testFuncTask, *testFuncTask) {
-				return events.SuccessResult(), &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}
+			handleFunc: func(ctx context.Context, task testFuncTask) (*testFuncTask, *testFuncTask, error) {
+				return &testFuncTask{"compensate", ""}, &testFuncTask{"next", ""}, nil
 			},
 			expectedToBeOk: false,
 		},
@@ -62,9 +61,9 @@ func TestStepHandleFuncValidation(t *testing.T) {
 			expectedToBeOk: false,
 		},
 		{
-			name: "handle func returning only the result and next task",
-			handleFunc: func(ctx context.Context, task *testFuncTask) (result, *testFuncTask) {
-				return events.SuccessResult(), &testFuncTask{"next", ""}
+			name: "handle func returning only the error and next task",
+			handleFunc: func(ctx context.Context, task *testFuncTask) (*testFuncTask, error) {
+				return &testFuncTask{"next", ""}, nil
 			},
 			expectedToBeOk: false,
 		},
@@ -89,8 +88,8 @@ func TestStepCompensateFuncValidation(t *testing.T) {
 	}{
 		{
 			name: "a valid compensate func",
-			compensateFunc: func(ctx context.Context, task *testFuncTask) result {
-				return events.SuccessResult()
+			compensateFunc: func(ctx context.Context, task *testFuncTask) error {
+				return nil
 			},
 			expectedToBeOk: true,
 		},
@@ -101,29 +100,29 @@ func TestStepCompensateFuncValidation(t *testing.T) {
 		},
 		{
 			name: "compensate func with no arguments",
-			compensateFunc: func() result {
-				return events.SuccessResult()
+			compensateFunc: func() error {
+				return nil
 			},
 			expectedToBeOk: false,
 		},
 		{
 			name: "compensate func with only context argument",
-			compensateFunc: func(ctx context.Context) result {
-				return events.SuccessResult()
+			compensateFunc: func(ctx context.Context) error {
+				return nil
 			},
 			expectedToBeOk: false,
 		},
 		{
 			name: "compensate func with task not implementing the interface",
-			compensateFunc: func(ctx context.Context, task *notTestFuncTask) result {
-				return events.SuccessResult()
+			compensateFunc: func(ctx context.Context, task *notTestFuncTask) error {
+				return nil
 			},
 			expectedToBeOk: false,
 		},
 		{
 			name: "compensate func with non-pointer task",
-			compensateFunc: func(ctx context.Context, task testFuncTask) result {
-				return events.SuccessResult()
+			compensateFunc: func(ctx context.Context, task testFuncTask) error {
+				return nil
 			},
 			expectedToBeOk: false,
 		},
