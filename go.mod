@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/lib/pq v1.10.8
 	github.com/markusylisiurunen/go-opinionatedevents v0.1.0-beta.12
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.4
 	github.com/tidwall/gjson v1.14.4
 )
 
